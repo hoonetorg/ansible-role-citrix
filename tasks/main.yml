@@ -1,0 +1,19 @@
+---
+- name: Build final citrix configuration
+  ansible.builtin.set_fact:
+    citrix_final: "{{ citrix_defaults | combine(citrix | default({}), recursive=True) }}"
+
+- name: Install Citrix Workspace app
+  when: citrix_final.install
+  block:
+    - name: Only openSUSE is supported
+      ansible.builtin.assert:
+        that: ansible_os_family == 'Suse'
+        fail_msg: "citrix: only openSUSE (ICAClient-suse RPM) is supported, not {{ ansible_distribution }}"
+        quiet: true
+
+    - name: Get the RPM on the controller
+      ansible.builtin.include_tasks: download.yml
+
+    - name: Install on the host
+      ansible.builtin.include_tasks: install.yml

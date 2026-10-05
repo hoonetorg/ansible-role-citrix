@@ -1,0 +1,5 @@
+---
+# download button: <a ... rel="//downloads.citrix.com/<id>/ICAClient-suse-...rpm?__gda__=...">
+citrix_link_re: 'rel="(//downloads\.citrix\.com/[^"]*/ICAClient-suse-[^"]*\.rpm\?[^"]*)"'
+# ICAClient-suse-gcc-8-26.04.10.1-0.x86_64.rpm → 26.04.10.1
+citrix_version_re: '^ICAClient-suse-(?:gcc-[0-9]+-)?([0-9][0-9.]*)-.*$'

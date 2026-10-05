@@ -1,0 +1,95 @@
+---
+# runs on the controller once per play; a download problem is not an error as long as an RPM from an
+# earlier download is in download_dir
+- name: Controller download cache
+  delegate_to: localhost
+  run_once: true
+  become: false
+  block:
+    - name: Create download directory
+      ansible.builtin.file:
+        path: "{{ citrix_final.download_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Read the Citrix download page
+      ansible.builtin.uri:
+        url: "{{ citrix_final.page_url }}"
+        return_content: true
+        timeout: 30
+        headers:
+          User-Agent: Mozilla/5.0
+      register: citrix_page
+      failed_when: false
+      check_mode: false
+      when: citrix_final.download
+
+    # the download button keeps the token-signed link in its rel attribute (static HTML)
+    - name: Extract the download link of the SUSE RPM
+      ansible.builtin.set_fact:
+        citrix_url: "{{ ('https:' ~ link | replace('&amp;', '&')) if link else '' }}"
+        citrix_url_file: "{{ link.split('?')[0] | basename }}"
+      vars:
+        found: "{{ citrix_page.content | default('', true) | regex_search(citrix_link_re, '\\1') }}"
+        link: "{{ found | first if found else '' }}"
+      when: citrix_final.download
+
+    - name: Download page or link not available
+      ansible.builtin.debug:
+        msg: >-
+          citrix: no download link found ({{ citrix_page.msg | default('page not read') }}) - using the last
+          downloaded RPM in {{ citrix_final.download_dir }}
+      when:
+        - citrix_final.download
+        - citrix_url | length == 0
+
+    - name: Download the RPM (only a version not downloaded yet)
+      ansible.builtin.get_url:
+        url: "{{ citrix_url }}"
+        dest: "{{ citrix_final.download_dir }}/{{ citrix_url_file }}"
+        mode: "0644"
+        force: false
+        timeout: 600
+      register: citrix_get
+      failed_when: false
+      when:
+        - citrix_final.download
+        - citrix_url | length > 0
+
+    - name: Download failed
+      ansible.builtin.debug:
+        msg: "citrix: download failed ({{ citrix_get.msg | default('') }}) - using the last downloaded RPM"
+      when: citrix_get.failed | default(false)
+
+    - name: Find downloaded RPMs
+      ansible.builtin.find:
+        paths: "{{ citrix_final.download_dir }}"
+        patterns: "ICAClient-suse-*.rpm"
+      register: citrix_found
+
+    - name: RPM must be available
+      ansible.builtin.assert:
+        that: citrix_found.files | length > 0
+        fail_msg: >-
+          citrix: no ICAClient-suse RPM in {{ citrix_final.download_dir }} and none could be downloaded - put it
+          there by hand (download from {{ citrix_final.page_url }})
+        quiet: true
+
+    # version from the file name, e.g. ICAClient-suse-gcc-8-26.04.10.1-0.x86_64.rpm → 26.04.10.1
+    - name: Choose the newest RPM
+      ansible.builtin.set_fact:
+        citrix_rpms: "{{ by_version.keys() | community.general.version_sort | map('extract', by_version) | list }}"
+      vars:
+        paths: "{{ citrix_found.files | map(attribute='path') | list }}"
+        by_version: "{{ dict(paths | map('basename') | map('regex_replace', citrix_version_re, '\\1') | zip(paths)) }}"
+
+    - name: Remove older RPMs (keep the newest {{ citrix_final.keep }})
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop: "{{ citrix_rpms[:-(citrix_final.keep | int)] if citrix_rpms | length > citrix_final.keep | int else [] }}"
+
+    - name: RPM to install
+      ansible.builtin.set_fact:
+        citrix_rpm: "{{ citrix_rpms | last }}"
+        citrix_rpm_version: "{{ citrix_rpms | last | basename | regex_replace(citrix_version_re, '\\1') }}"

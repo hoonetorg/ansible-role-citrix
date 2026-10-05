@@ -1,0 +1,15 @@
+---
+# Merged with the inventory variable `citrix` into `citrix_final`.
+citrix_defaults:
+  # install the Citrix Workspace app (ICAClient) on this host
+  install: false
+  # Citrix has no package repository; this page carries the current, token-signed download links
+  page_url: https://www.citrix.com/downloads/workspace-app/linux/workspace-app-for-linux-latest.html
+  # download cache on the controller (nsbldr: /srv/ansible/largefiles = the mapped ansiblelargefilesdir)
+  download_dir: /srv/ansible/largefiles/citrix
+  # false: no download, use the newest RPM already in download_dir (e.g. a pinned version put there by hand)
+  download: true
+  # newest RPMs kept in download_dir (about 425 MB each)
+  keep: 2
+  # libraries the RPM needs but doesn't declare (wfica: libva-drm/-x11; selfservice: webkit2gtk-4.0)
+  packages: [libva-drm2, libva-x11-2, libwebkit2gtk-4_0-37]

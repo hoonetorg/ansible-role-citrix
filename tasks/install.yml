@@ -1,0 +1,44 @@
+---
+- name: Install libraries the ICAClient RPM doesn't declare
+  ansible.builtin.package:
+    name: "{{ citrix_final.packages }}"
+    state: present
+
+- name: Read installed ICAClient version
+  ansible.builtin.command:
+    argv: [rpm, -q, --qf, "%{VERSION}", ICAClient]
+  register: citrix_installed
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Install or update ICAClient
+  when: >-
+    citrix_installed.rc != 0
+    or citrix_rpm_version is version(citrix_installed.stdout | trim, '>')
+  block:
+    - name: Create upload directory
+      ansible.builtin.file:
+        path: /var/tmp/ansible-citrix
+        state: directory
+        mode: "0700"
+
+    - name: Copy the RPM to the host
+      ansible.builtin.copy:
+        src: "{{ citrix_rpm }}"
+        dest: "/var/tmp/ansible-citrix/{{ citrix_rpm | basename }}"
+        mode: "0600"
+
+    # zypper installs the local RPM and resolves its dependencies from the repositories;
+    # the Citrix RPM is unsigned (= --allow-unsigned-rpm)
+    - name: Install the RPM with zypper
+      community.general.zypper:
+        name: "/var/tmp/ansible-citrix/{{ citrix_rpm | basename }}"
+        state: present
+        disable_gpg_check: true
+
+  always:
+    - name: Remove the copied RPM
+      ansible.builtin.file:
+        path: /var/tmp/ansible-citrix
+        state: absent
