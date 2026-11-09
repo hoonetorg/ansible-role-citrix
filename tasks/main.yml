@@ -8,8 +8,8 @@
   block:
     - name: Only openSUSE is supported
       ansible.builtin.assert:
-        that: ansible_os_family == 'Suse'
-        fail_msg: "citrix: only openSUSE (ICAClient-suse RPM) is supported, not {{ ansible_distribution }}"
+        that: ansible_facts.os_family == 'Suse'
+        fail_msg: "citrix: only openSUSE (ICAClient-suse RPM) is supported, not {{ ansible_facts.distribution }}"
         quiet: true
 
     - name: Get the RPM on the controller
